@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TicTacToe для Telegram</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+      color: #333;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    .container {
+      max-width: 360px;
+      margin: 0 auto;
+      padding: 15px;
+    }
+    
+    h1 {
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+    
+    .mode-selection {
+      margin-bottom: 20px;
+    }
+    
+    button {
+      background-color: #389ce9;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 15px;
+      margin: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #2f89d1;
+    }
+    
+    .game-board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .cell {
+      width: 100%;
+      aspect-ratio: 1/1;
+      background-color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      font-weight: bold;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .cell:hover {
+      background-color: #f0f0f0;
+    }
+    
+    .cell.x {
+      color: #e74c3c;
+    }
+    
+    .cell.o {
+      color: #3498db;
+    }
+    
+    .status {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 15px 0;
+      min-height: 25px;
+    }
+    
+    .win-line {
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.2);
+      z-index: 1;
+      transform-origin: left;
+    }
+    
+    .board-container {
+      position: relative;
+    }
+    
+    .restart {
+      background-color: #e74c3c;
+    }
+    
+    .restart:hover {
+      background-color: #c0392b;
+    }
+    
+    /* Стили для Telegram */
+    body.telegram-theme {
+      background-color: var(--tg-theme-bg-color, #f5f5f5);
+      color: var(--tg-theme-text-color, #333);
+    }
+    
+    .telegram-theme button {
+      background-color: var(--tg-theme-button-color, #389ce9);
+      color: var(--tg-theme-button-text-color, white);
+    }
+    
+    .telegram-theme button:hover {
+      background-color: var(--tg-theme-secondary-bg-color, #2f89d1);
+    }
+    
+    .telegram-theme .restart {
+      background-color: #e74c3c;
+    }
+    
+    .telegram-theme .restart:hover {
+      background-color: #c0392b;
+    }
+    
+    /* Animation */
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    
+    .win {
+      animation: pulse 0.5s ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Крестики-нолики</h1>
+    
+    <div class="mode-selection">
+      <button id="vs-computer">Игра против компьютера</button>
+      <button id="vs-friend">Игра с другом</button>
+    </div>
+    
+    <div class="status" id="status">Выберите режим игры</div>
+    
+    <div class="board-container">
+      <div class="game-board" id="board">
+        <div class="cell" data-index="0"></div>
+        <div class="cell" data-index="1"></div>
+        <div class="cell" data-index="2"></div>
+        <div class="cell" data-index="3"></div>
+        <div class="cell" data-index="4"></div>
+        <div class="cell" data-index="5"></div>
+        <div class="cell" data-index="6"></div>
+        <div class="cell" data-index="7"></div>
+        <div class="cell" data-index="8"></div>
+      </div>
+      <div id="win-line" class="win-line" style="display: none;"></div>
+    </div>
+    
+    <button id="restart" class="restart">Начать заново</button>
+  </div>
+  
+  <script>
+    // Проверка и применение стилей Telegram
+    function applyTelegramStyles() {
+      try {
+        const tgWebApp = window.Telegram?.WebApp;
+        if (tgWebApp) {
+          document.body.classList.add('telegram-theme');
+          tgWebApp.ready();
+          tgWebApp.expand();
+        }
+      } catch (e) {
+        console.log('Not in Telegram WebApp');
+      }
+    }
+    
+    document.addEventListener('DOMContentLoaded', applyTelegramStyles);
+    
+    // Основной игровой код
+    const board = document.getElementById('board');
+    const cells = document.querySelectorAll('.cell');
+    const status = document.getElementById('status');
+    const restartButton = document.getElementById('restart');
+    const vsComputerButton = document.getElementById('vs-computer');
+    const vsFriendButton = document.getElementById('vs-friend');
+    const winLine = document.getElementById('win-line');
+    
+    // Состояние игры
+    let gameState = {
+      board: Array(9).fill(''),
+      currentPlayer: 'X',
+      gameMode: null, // 'computer' или 'friend'
+      gameActive: false,
+      moveCount: 0
+    };
+    
+    // Выигрышные комбинации и их координаты для линии
+    const winPatterns = [
+      {indices: [0, 1, 2], line: {x: 0, y: 16.67, width: 100, height: 5, angle: 0}},  // Верхняя строка
+      {indices: [3, 4, 5], line: {x: 0, y: 50, width: 100, height: 5, angle: 0}},     // Средняя строка
+      {indices: [6, 7, 8], line: {x: 0, y: 83.33, width: 100, height: 5, angle: 0}},  // Нижняя строка
+      {indices: [0, 3, 6], line: {x: 16.67, y: 0, width: 5, height: 100, angle: 90}}, // Левая колонка
+      {indices: [1, 4, 7], line: {x: 50, y: 0, width: 5, height: 100, angle: 90}},    // Средняя колонка
+      {indices: [2, 5, 8], line: {x: 83.33, y: 0, width: 5, height: 100, angle: 90}}, // Правая колонка
+      {indices: [0, 4, 8], line: {x: 0, y: 0, width: 141.42, height: 5, angle: 45}},  // Диагональ \
+      {indices: [2, 4, 6], line: {x: 0, y: 100, width: 141.42, height: 5, angle: -45}} // Диагональ /
+    ];
+    
+    // Инициализация игры
+    function initGame() {
+      gameState.board = Array(9).fill('');
+      gameState.currentPlayer = 'X';
+      gameState.gameActive = true;
+      gameState.moveCount = 0;
+      
+      // Сброс UI
+      cells.forEach(cell => {
+        cell.textContent = '';
+        cell.classList.remove('x', 'o', 'win');
+      });
+      
+      winLine.style.display = 'none';
+      
+      // Установка статуса
+      if (gameState.gameMode === 'computer') {
+        status.textContent = 'Ваш ход (X)';
+      } else if (gameState.gameMode === 'friend') {
+        status.textContent = 'Ход игрока X';
+      } else {
+        status.textContent = 'Выберите режим игры';
+        gameState.gameActive = false;
+      }
+    }
+    
+    // Проверка выигрыша
+    function checkWin() {
+      for (const pattern of winPatterns) {
+        const { indices } = pattern;
+        if (
+          gameState.board[indices[0]] &&
+          gameState.board[indices[0]] === gameState.board[indices[1]] &&
+          gameState.board[indices[0]] === gameState.board[indices[2]]
+        ) {
+          // Подсветка выигрышной комбинации
+          indices.forEach(index => {
+            cells[index].classList.add('win');
+          });
+          
+          // Отрисовка линии выигрыша
+          const { line } = pattern;
+          winLine.style.display = 'block';
+          winLine.style.width = `${line.width}%`;
+          winLine.style.height = `${line.height}%`;
+          winLine.style.top = `${line.y}%`;
+          winLine.style.left = `${line.x}%`;
+          winLine.style.transform = `rotate(${line.angle}deg)`;
+          
+          return gameState.board[indices[0]];
+        }
+      }
+      
+      if (gameState.moveCount === 9) {
+        return 'draw';
+      }
+      
+      return null;
+    }
+    
+    // Обработка хода игрока
+    function handlePlayerMove(index) {
+      if (!gameState.gameActive || gameState.board[index]) {
+        return;
+      }
+      
+      // Обновление состояния доски
+      gameState.board[index] = gameState.currentPlayer;
+      gameState.moveCount++;
+      
+      // Обновление UI
+      cells[index].textContent = gameState.currentPlayer;
+      cells[index].classList.add(gameState.currentPlayer.toLowerCase());
+      
+      // Проверка выигрыша
+      const result = checkWin();
+      if (result) {
+        gameState.gameActive = false;
+        if (result === 'draw') {
+          status.textContent = 'Ничья!';
+        } else {
+          if (gameState.gameMode === 'computer') {
+            status.textContent = result === 'X' ? 'Вы выиграли!' : 'Компьютер выиграл!';
+          } else {
+            status.textContent = `Игрок ${result} выиграл!`;
+          }
+        }
+        return;
+      }
+      
+      // Смена игрока
+      gameState.currentPlayer = gameState.currentPlayer === 'X' ? 'O' : 'X';
+      
+      // Обновление статуса
+      if (gameState.gameMode === 'computer') {
+        if (gameState.currentPlayer === 'O') {
+          status.textContent = 'Ход компьютера...';
+          setTimeout(makeComputerMove, 600);
+        } else {
+          status.textContent = 'Ваш ход (X)';
+        }
+      } else {
+        status.textContent = `Ход игрока ${gameState.currentPlayer}`;
+      }
+    }
+    
+    // Ход компьютера
+    function makeComputerMove() {
+      if (!gameState.gameActive || gameState.currentPlayer !== 'O') {
+        return;
+      }
+      
+      let bestMove = findBestMove();
+      handlePlayerMove(bestMove);
+    }
+    
+    // Нахождение лучшего хода для компьютера (миниатюрная версия минимакса)
+    function findBestMove() {
+      // Сначала проверяем, может ли компьютер выиграть с одного хода
+      for (let i = 0; i < 9; i++) {
+        if (!gameState.board[i]) {
+          gameState.board[i] = 'O';
+          for (const pattern of winPatterns) {
+            const { indices } = pattern;
+            if (
+              gameState.board[indices[0]] === 'O' &&
+              gameState.board[indices[1]] === 'O' &&
+              gameState.board[indices[2]] === 'O'
+            ) {
+              gameState.board[i] = '';
+              return i;
+            }
+          }
+          gameState.board[i] = '';
+        }
+      }
+      
+      // Затем проверяем, может ли игрок выиграть, и блокируем его
+      for (let i = 0; i < 9; i++) {
+        if (!gameState.board[i]) {
+          gameState.board[i] = 'X';
+          for (const pattern of winPatterns) {
+            const { indices } = pattern;
+            if (
+              gameState.board[indices[0]] === 'X' &&
+              gameState.board[indices[1]] === 'X' &&
+              gameState.board[indices[2]] === 'X'
+            ) {
+              gameState.board[i] = '';
+              return i;
+            }
+          }
+          gameState.board[i] = '';
+        }
+      }
+      
+      // Стратегически важные клетки
+      const strategicMoves = [4, 0, 2, 6, 8, 1, 3, 5, 7];
+      for (const move of strategicMoves) {
+        if (!gameState.board[move]) {
+          return move;
+        }
+      }
+      
+      // Если ничего не сработало, выбираем случайную пустую клетку
+      const emptyIndices = gameState.board.map((val, idx) => val === '' ? idx : -1).filter(idx => idx !== -1);
+      if (emptyIndices.length > 0) {
+        return emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+      }
+      
+      return -1; // Никаких ходов (не должно произойти)
+    }
+    
+    // Обработчики событий
+    function setupEventListeners() {
+      // Клик по ячейке
+      cells.forEach(cell => {
+        cell.addEventListener('click', () => {
+          if (!gameState.gameActive) return;
+          const index = parseInt(cell.dataset.index);
+          handlePlayerMove(index);
+        });
+      });
+      
+      // Кнопка перезапуска
+      restartButton.addEventListener('click', initGame);
+      
+      // Кнопки выбора режима
+      vsComputerButton.addEventListener('click', () => {
+        gameState.gameMode = 'computer';
+        initGame();
+      });
+      
+      vsFriendButton.addEventListener('click', () => {
+        gameState.gameMode = 'friend';
+        initGame();
+      });
+    }
+    
+    // Инициализация игры
+    setupEventListeners();
+    initGame();
+  </script>
+</body>
+</html>
