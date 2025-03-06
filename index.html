@@ -2,374 +2,65 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Catch The Ball - Telegram Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбери игру</title>
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            overflow: hidden;
-            touch-action: manipulation;
-            background-color: #1e1e2e;
             font-family: Arial, sans-serif;
-            color: white;
         }
 
-        .game-container {
-            width: 100vw;
+        body {
+            background-color: #171c28;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            text-align: center;
         }
 
-        #gameCanvas {
-            background-color: #313244;
-            border-radius: 10px;
-            touch-action: none;
-        }
-
-        .score-container {
-            padding: 10px;
-            font-size: 24px;
-            margin-bottom: 10px;
-        }
-
-        .game-over {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
-            display: none;
-        }
-
-        .game-over h2 {
-            font-size: 36px;
-            color: white;
+        h1 {
             margin-bottom: 20px;
+            font-size: 24px;
         }
 
-        .restart-btn {
-            padding: 10px 20px;
+        .game-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .game-link {
+            display: block;
+            width: 250px;
+            padding: 12px;
+            background-color: #1e90ff;
+            text-decoration: none;
+            color: #ffffff;
             font-size: 18px;
-            background-color: #f38ba8;
-            border: none;
-            border-radius: 5px;
-            color: white;
-            cursor: pointer;
+            font-weight: bold;
+            border-radius: 8px;
+            text-align: center;
+            transition: background 0.3s;
+        }
+
+        .game-link:hover {
+            background-color: #0c70d6;
         }
     </style>
 </head>
 <body>
-<div class="game-container">
-    <div class="score-container">Счет: <span id="score">0</span></div>
-    <canvas id="gameCanvas" width="320" height="480"></canvas>
+
+<h1>Выбери свою игру</h1>
+
+<div class="game-list">
+    <a href="game1.html" class="game-link">🎮 Игра 1</a>
+    <a href="game2.html" class="game-link">🎮 Игра 2</a>
 </div>
 
-<div class="game-over" id="gameOver">
-    <h2>Игра окончена!</h2>
-    <p>Ваш счет: <span id="finalScore">0</span></p>
-    <button class="restart-btn" id="restartBtn">Играть снова</button>
-</div>
-
-<script>
-    // Инициализация Telegram WebApp API (если доступен)
-    try {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-    } catch (e) {
-        console.log("Telegram WebApp API не обнаружен. Игра запущена вне Telegram.");
-    }
-
-    // Получаем элементы DOM
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const scoreElement = document.getElementById('score');
-    const finalScoreElement = document.getElementById('finalScore');
-    const gameOverElement = document.getElementById('gameOver');
-    const restartBtn = document.getElementById('restartBtn');
-
-    // Настройки игры
-    const paddleHeight = 10;
-    const paddleWidth = 80;
-    const ballRadius = 10;
-    let score = 0;
-    let lives = 3;
-    let gameSpeed = 2;
-
-    // Позиция платформы
-    let paddleX = (canvas.width - paddleWidth) / 2;
-
-    // Позиция и скорость мяча
-    let ballX = canvas.width / 2;
-    let ballY = canvas.height - 30;
-    let ballSpeedX = 2;
-    let ballSpeedY = -2;
-
-    // Флаги движения
-    let rightPressed = false;
-    let leftPressed = false;
-    let touchX = null;
-
-    // Падающие объекты
-    const items = [];
-    const itemRadius = 8;
-    const itemSpeed = 2;
-    const maxItems = 5;
-    const itemTypes = [
-        { color: '#f38ba8', points: 10 }, // красный
-        { color: '#fab387', points: 5 },  // оранжевый
-        { color: '#a6e3a1', points: 15 }, // зеленый
-        { color: '#89b4fa', points: -10 } // синий (отрицательные очки)
-    ];
-
-    // Обработчики событий клавиатуры
-    function keyDownHandler(e) {
-        if (e.key === 'Right' || e.key === 'ArrowRight') {
-            rightPressed = true;
-        } else if (e.key === 'Left' || e.key === 'ArrowLeft') {
-            leftPressed = true;
-        }
-    }
-
-    function keyUpHandler(e) {
-        if (e.key === 'Right' || e.key === 'ArrowRight') {
-            rightPressed = false;
-        } else if (e.key === 'Left' || e.key === 'ArrowLeft') {
-            leftPressed = false;
-        }
-    }
-
-    // Обработчики событий касания
-    function touchStartHandler(e) {
-        e.preventDefault();
-        const touch = e.touches[0];
-        touchX = touch.clientX;
-        paddleX = touchX - paddleWidth / 2;
-    }
-
-    function touchMoveHandler(e) {
-        e.preventDefault();
-        const touch = e.touches[0];
-        touchX = touch.clientX;
-        paddleX = touchX - paddleWidth / 2;
-    }
-
-    function touchEndHandler(e) {
-        e.preventDefault();
-        touchX = null;
-    }
-
-    // Обработчики событий мыши
-    function mouseMoveHandler(e) {
-        const relativeX = e.clientX - canvas.offsetLeft;
-        if (relativeX > 0 && relativeX < canvas.width) {
-            paddleX = relativeX - paddleWidth / 2;
-        }
-    }
-
-    // Добавление обработчиков событий
-    document.addEventListener('keydown', keyDownHandler, false);
-    document.addEventListener('keyup', keyUpHandler, false);
-    document.addEventListener('mousemove', mouseMoveHandler, false);
-    canvas.addEventListener('touchstart', touchStartHandler, false);
-    canvas.addEventListener('touchmove', touchMoveHandler, false);
-    canvas.addEventListener('touchend', touchEndHandler, false);
-
-    // Создание нового падающего объекта
-    function createItem() {
-        if (items.length < maxItems && Math.random() < 0.02) {
-            const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-            items.push({
-                x: Math.random() * (canvas.width - 2 * itemRadius) + itemRadius,
-                y: 0,
-                type: type
-            });
-        }
-    }
-
-    // Отрисовка платформы
-    function drawPaddle() {
-        ctx.beginPath();
-        ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
-        ctx.fillStyle = '#cba6f7';
-        ctx.fill();
-        ctx.closePath();
-    }
-
-    // Отрисовка мяча
-    function drawBall() {
-        ctx.beginPath();
-        ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#f5c2e7';
-        ctx.fill();
-        ctx.closePath();
-    }
-
-    // Отрисовка падающих объектов
-    function drawItems() {
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            ctx.beginPath();
-            ctx.arc(item.x, item.y, itemRadius, 0, Math.PI * 2);
-            ctx.fillStyle = item.type.color;
-            ctx.fill();
-            ctx.closePath();
-        }
-    }
-
-    // Отрисовка счета и жизней
-    function drawScore() {
-        scoreElement.textContent = score;
-    }
-
-    function drawLives() {
-        ctx.font = '16px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('Жизни: ' + lives, canvas.width - 80, 20);
-    }
-
-    // Обновление состояния игры
-    function update() {
-        // Обновление позиции платформы
-        if (rightPressed && paddleX < canvas.width - paddleWidth) {
-            paddleX += 7;
-        } else if (leftPressed && paddleX > 0) {
-            paddleX -= 7;
-        }
-
-        // Ограничение позиции платформы
-        if (paddleX < 0) paddleX = 0;
-        if (paddleX > canvas.width - paddleWidth) paddleX = canvas.width - paddleWidth;
-
-        // Обновление позиции мяча
-        ballX += ballSpeedX;
-        ballY += ballSpeedY;
-
-        // Отскок от стен
-        if (ballX + ballSpeedX > canvas.width - ballRadius || ballX + ballSpeedX < ballRadius) {
-            ballSpeedX = -ballSpeedX;
-        }
-
-        // Отскок от верха
-        if (ballY + ballSpeedY < ballRadius) {
-            ballSpeedY = -ballSpeedY;
-        }
-        // Отскок от платформы или падение вниз
-        else if (ballY + ballSpeedY > canvas.height - ballRadius - paddleHeight) {
-            if (ballX > paddleX && ballX < paddleX + paddleWidth) {
-                // Расчет угла отскока в зависимости от места удара
-                const hitPos = (ballX - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
-                ballSpeedX = hitPos * 3; // Максимальное изменение по X
-                ballSpeedY = -ballSpeedY;
-
-                // Увеличение скорости после каждого отскока
-                if (Math.abs(ballSpeedY) < 8) {
-                    ballSpeedY *= 1.05;
-                }
-            } else if (ballY + ballSpeedY > canvas.height) {
-                lives--;
-                if (lives === 0) {
-                    gameOver();
-                    return;
-                } else {
-                    // Сброс мяча
-                    ballX = canvas.width / 2;
-                    ballY = canvas.height - 30;
-                    ballSpeedX = 2;
-                    ballSpeedY = -2;
-                    paddleX = (canvas.width - paddleWidth) / 2;
-                }
-            }
-        }
-
-        // Обновление падающих объектов
-        for (let i = items.length - 1; i >= 0; i--) {
-            const item = items[i];
-            item.y += itemSpeed;
-
-            // Проверка столкновения с платформой
-            if (
-                item.y + itemRadius > canvas.height - paddleHeight &&
-                item.y - itemRadius < canvas.height &&
-                item.x > paddleX &&
-                item.x < paddleX + paddleWidth
-            ) {
-                // Добавление очков
-                score += item.type.points;
-                items.splice(i, 1);
-            }
-            // Удаление объектов, вышедших за пределы экрана
-            else if (item.y - itemRadius > canvas.height) {
-                items.splice(i, 1);
-            }
-        }
-
-        // Создание новых падающих объектов
-        createItem();
-    }
-
-    // Отрисовка всего игрового экрана
-    function draw() {
-        // Очистка холста
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Отрисовка элементов
-        drawPaddle();
-        drawBall();
-        drawItems();
-        drawScore();
-        drawLives();
-
-        // Обновление состояния
-        update();
-
-        // Запрос следующего кадра
-        requestAnimationFrame(draw);
-    }
-
-    // Функция окончания игры
-    function gameOver() {
-        finalScoreElement.textContent = score;
-        gameOverElement.style.display = 'flex';
-
-        // Отправка счета в Telegram (если доступен)
-        try {
-            window.Telegram.WebApp.sendData(JSON.stringify({
-                score: score
-            }));
-        } catch (e) {
-            console.log("Не удалось отправить счет в Telegram");
-        }
-    }
-
-    // Функция перезапуска игры
-    function restartGame() {
-        score = 0;
-        lives = 3;
-        gameSpeed = 2;
-        paddleX = (canvas.width - paddleWidth) / 2;
-        ballX = canvas.width / 2;
-        ballY = canvas.height - 30;
-        ballSpeedX = 2;
-        ballSpeedY = -2;
-        items.length = 0; // Очистка массива предметов
-        gameOverElement.style.display = 'none';
-    }
-
-    // Обработчик кнопки перезапуска
-    restartBtn.addEventListener('click', restartGame);
-
-    // Запуск игры
-    draw();
-</script>
 </body>
 </html>
